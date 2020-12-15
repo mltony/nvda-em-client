@@ -25,6 +25,7 @@ from scriptHandler import script, willSayAllResume
 import speech
 import struct
 import textInfos
+import time
 import tones
 import ui
 import UIAHandler
@@ -47,6 +48,20 @@ class AppModule(appModuleHandler.AppModule):
         if obj.role == controlTypes.ROLE_LISTITEM:
             if obj.parent is not None and obj.parent.parent is not None and obj.parent.parent.role == controlTypes.ROLE_TABLE:
                 clsList.insert(0, UIAGridRow)
+                
+    @script(description='Expand all messages in message view', gestures=['kb:NVDA+X'])
+    def script_expandMessages(self, gesture):
+        focus = api.getFocusObject()
+        interceptor = focus.treeInterceptor
+        if interceptor is None:
+            ui.message(_("Not in message view!"))
+            return
+        headings = list(interceptor._iterNodesByType("heading2"))
+        for heading in headings:
+            if heading.obj.IA2Attributes.get('class', "") == "header header_gray":
+                heading.obj.doAction()
+        ui.message(_("Expanded))
+        ui.message(f"Found {len(headings)} headings")
 
 class UIAGridRow(RowWithFakeNavigation,UIA):
     def _get_name(self):
