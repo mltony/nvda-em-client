@@ -60,7 +60,7 @@ class AppModule(appModuleHandler.AppModule):
         for heading in headings:
             if heading.obj.IA2Attributes.get('class', "") == "header header_gray":
                 heading.obj.doAction()
-        ui.message(_("Expanded))
+        ui.message(_("Expanded"))
         ui.message(f"Found {len(headings)} headings")
 
 class UIAGridRow(RowWithFakeNavigation,UIA):
