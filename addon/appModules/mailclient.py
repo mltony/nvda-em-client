@@ -33,7 +33,7 @@ import UIAHandler
 from UIAUtils import createUIAMultiPropertyCondition
 import wx
 
-debug = False
+debug = True
 if debug:
     f = open("C:\\Users\\tony\\Dropbox\\1.txt", "w", encoding="utf-8")
 def mylog(s):
@@ -65,6 +65,7 @@ def printTree(obj, level=10, indent=0):
     for child in children:
         result.extend(printTree(child, li, ni))
     return "\n".join(result)
+    
 
 def printTree2(obj, level=10, indent=0):
     result = []
@@ -80,6 +81,7 @@ def printTree2(obj, level=10, indent=0):
         result.append(printTree2(child, li, ni))
         child = child.next
     return "\n".join(result)
+    
 
 def printTree3(obj, level=10, indent=0):
     result = []
@@ -88,7 +90,16 @@ def printTree3(obj, level=10, indent=0):
         return f"{indentStr}<None>"
     if level < 0:
         return f"{indentStr}..."
-    desc = f"{indentStr}{controlTypes.roleLabels[obj.role]} {obj.name}"
+    name = obj.name
+    if "\n" in name:
+        indentStr2 = indentStr + "    "
+        name = "\n" + "\n".join(
+            [
+                indentStr2 + s
+                for s in name.split("\n")
+            ]
+        )
+    desc = f"{indentStr}{controlTypes.roleLabels[obj.role]} {name}"
     result.append(desc)
     ni = indent+4
     li = level-1
@@ -98,16 +109,19 @@ def printTree3(obj, level=10, indent=0):
         child = child.simpleNext
     return "\n".join(result)
 
-    
+
 def desc(obj):
     return f"{controlTypes.roleLabels[obj.role]} {obj.name}"
-    
+
+
 def getWindow(focus):
     if focus.parent is None:
         raise Exception("Desktop window is focused!")
     while focus.parent.parent is not None:
         focus = focus.parent
     return focus
+    
+    
 def     findDocument(window=None):
     if window is None:
         window = api.getForegroundObject()
@@ -124,7 +138,7 @@ def findSubDocument(window=None):
     if subdocument.role != controlTypes.ROLE_DOCUMENT:
         raise Exception(f"Failed to find subdocument. Debug:\n{printTree3(document)}")
     return subdocument
-    
+
 def findTopLevelObject(focus=None, window=None):
     if window is None:
         window = api.getForegroundObject()
@@ -141,8 +155,9 @@ def circularSimpleNext(obj, direction):
     if next is None:
         next = obj.simpleParent.simpleFirstChild if direction > 0 else obj.simpleParent.simpleLastChild
     return next
-    
-def findNextImportant(direction, focus=None, window=None):
+
+def findNextPane(direction, focus=None, window=None):
+    " Old impl"
     tlo = findTopLevelObject(focus, window)
     obj = tlo
     for i in range(100):
@@ -156,7 +171,66 @@ def findNextImportant(direction, focus=None, window=None):
         } :
             return obj
     raise Exception(f"Failed to find next top-level object - infinite loop detected. Debug:\n{printTree3(window)}")
-        
+
+def getSimpleSiblingsRecursively(obj, direction):
+    result = []
+    for i in range(100):
+        obj = obj.simpleNext if direction > 0 else obj.simplePrevious
+        if obj is None:
+            return result
+        result.append(obj)
+    raise Exception("Infinite loop!")
+
+def getSimpleSiblings(obj):
+    return getSimpleSiblingsRecursively(obj, -1)[::-1] + [obj] + getSimpleSiblingsRecursively(obj, 1)
+
+def findNextPane(direction, focus=None, window=None):
+    tlo = findTopLevelObject(focus, window)
+    obj = tlo
+    siblings = getSimpleSiblings(obj)
+    mylog("Before filtering:\n" + "\n".join(map(desc, siblings)))
+    interestingRoles = {
+            controlTypes.ROLE_TABLE,
+            controlTypes.ROLE_DOCUMENT,
+            controlTypes.ROLE_TREEVIEW,
+    }
+    interestingIndices = [i for i in range(len(siblings)) if siblings[i].role in interestingRoles]
+    mylog(f"interestingIndices={interestingIndices}")
+    effectiveIndex = max(0, bisect.bisect_right(interestingIndices, siblings.index(tlo)) - 1)
+    effectiveIndex = interestingIndices[effectiveIndex]
+    mylog(f"effectiveIndex={effectiveIndex}")
+    effectiveTlo = siblings[effectiveIndex]
+    mylog(f"effectiveTlo={desc(effectiveTlo)}")
+    #ui.message(desc(effectiveTlo))
+    siblings = list(filter(lambda x: x.role in interestingRoles, siblings))
+    mylog("After filtering: \n" + "\n".join(map(desc, siblings)))
+    # Now reshuffle things.
+    newOrder = []
+    def moveToNewOrder(role):
+        ii = [i for i in range(len(siblings)) if siblings[i].role == role]
+        if len(ii) > 0:
+            i = ii[0]
+            mylog(f"Moving {i}-th element {desc(siblings[i])} to newOrder!")
+            newOrder.append(siblings[i])
+            del siblings[i]
+        else:
+            mylog(f"Couldn't find {controlTypes.roleLabels[role]}")
+
+    moveToNewOrder(controlTypes.ROLE_TREEVIEW)
+    moveToNewOrder(controlTypes.ROLE_TABLE)
+    moveToNewOrder(controlTypes.ROLE_DOCUMENT)
+    newOrder.extend(siblings)
+    mylog("After reshuffling: \n" + "\n".join(map(desc, siblings)))
+    newIndex = newOrder.index(effectiveTlo)
+    mylog(f"newIndex={newIndex}")
+    newIndex = (newIndex + direction) % len(newOrder)
+    mylog(f"newIndex={newIndex}")
+    newObj = newOrder[newIndex]
+    mylog(f"newObj={desc(newObj)}")
+    return newObj
+
+
+
 
 def traverseText(obj):
     child = obj.simpleFirstChild
@@ -181,7 +255,16 @@ def speakObject(document):
 
     callback()
 
-
+logEvents = False
+if True:
+    # Do some event debugging!
+    originalShouldAcceptEvent = eventHandler.shouldAcceptEvent
+    def shouldAcceptEvent(eventName, windowHandle=None):
+        if logEvents:
+            mylog(f"sae({eventName}, {windowHandle})")
+        return originalShouldAcceptEvent(eventName, windowHandle)
+    eventHandler.shouldAcceptEvent = shouldAcceptEvent
+    tones.beep(500, 500)
 class AppModule(appModuleHandler.AppModule):
     def chooseNVDAObjectOverlayClasses(self, obj, clsList):
         if obj.role == controlTypes.ROLE_LISTITEM:
@@ -202,14 +285,18 @@ class AppModule(appModuleHandler.AppModule):
         ui.message(_("Expanded"))
         ui.message(f"Found {len(headings)} headings")
         
+    @script(description='Jump to next pane', gestures=['kb:F5'])
+    def script_toggleLog(self, gesture):
+        
+
     @script(description='Jump to next pane', gestures=['kb:F6'])
     def script_nextPane(self, gesture):
-        obj = findNextImportant(1)
+        obj = findNextPane(1)
         obj.setFocus()
         api.setFocusObject(obj)
     @script(description='Jump to previous pane', gestures=['kb:Shift+F6'])
     def script_previousPane(self, gesture):
-        obj = findNextImportant(-1)
+        obj = findNextPane(-1)
         obj.setFocus()
         api.setFocusObject(obj)
     def event_gainFocus(self, obj, nextHandler):
@@ -221,8 +308,8 @@ class AppModule(appModuleHandler.AppModule):
         # We don't use sayAllHandler.readObjects(obj) here, since it would read the title of the window again.
         speakObject(obj)
         nextHandler()
-    
-    
+
+
 class UIAGridRow(RowWithFakeNavigation,UIA):
     def _get_name(self):
         return ""
