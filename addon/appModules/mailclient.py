@@ -29,9 +29,10 @@ import time
 import tones
 import ui
 import UIAHandler
+from UIAUtils import createUIAMultiPropertyCondition
 import wx
 
-debug = False
+debug = True
 if debug:
     f = open("C:\\Users\\tony\\Dropbox\\1.txt", "w", encoding="utf-8")
 def mylog(s):
@@ -43,12 +44,109 @@ def myAssert(condition):
     if not condition:
         raise RuntimeError("Assertion failed")
 
+#useful for debug!
+def printTree(obj, level=10, indent=0):
+    result = []
+    indentStr = " "*indent
+    if level < 0:
+        return [f"{indentStr}..."]
+    try:
+        desc = f"{indentStr}{controlTypes.roleLabels[obj.role]} {obj.name}"
+    except:
+        desc = str(type(obj))
+    result.append(desc)
+    ni = indent+4
+    li = level-1
+    try:
+        children = obj.children
+    except:
+        children = []
+    for child in children:
+        result.extend(printTree(child, li, ni))
+    return "\n".join(result)
+
+def printTree2(obj, level=10, indent=0):
+    result = []
+    indentStr = " "*indent
+    if level < 0:
+        return f"{indentStr}..."
+    desc = f"{indentStr}{controlTypes.roleLabels[obj.role]} {obj.name}"
+    result.append(desc)
+    ni = indent+4
+    li = level-1
+    child = obj.firstChild
+    while child is not None:
+        result.append(printTree2(child, li, ni))
+        child = child.next
+    return "\n".join(result)
+
+def printTree3(obj, level=10, indent=0):
+    result = []
+    indentStr = " "*indent
+    if obj is None:
+        return f"{indentStr}<None>"
+    if level < 0:
+        return f"{indentStr}..."
+    desc = f"{indentStr}{controlTypes.roleLabels[obj.role]} {obj.name}"
+    result.append(desc)
+    ni = indent+4
+    li = level-1
+    child = obj.simpleFirstChild
+    while child is not None:
+        result.append(printTree3(child, li, ni))
+        child = child.simpleNext
+    return "\n".join(result)
+
+def getWindow(focus):
+    if focus.parent is None:
+        raise Exception("Desktop window is focused!")
+    while focus.parent.parent is not None:
+        focus = focus.parent
+    return focus
+def     findDocument(window=None):
+    if window is None:
+        window = api.getForegroundObject()
+    document = window.simpleFirstChild.simpleNext
+    if document.role != controlTypes.ROLE_DOCUMENT:
+        raise Exception(f"Failed to find document. Debug:\n{printTree3(window)}")
+    return document
+
+def findSubDocument(window=None):
+    document = findDocument(window)
+    subdocument = document.simpleLastChild
+    if subdocument.role != controlTypes.ROLE_DOCUMENT:
+        subdocument = subdocument.simplePrevious
+    if subdocument.role != controlTypes.ROLE_DOCUMENT:
+        raise Exception(f"Failed to find subdocument. Debug:\n{printTree3(document)}")
+    return subdocument
+
+def traverseText(obj):
+    child = obj.simpleFirstChild
+    if child is None and obj.name is not None and len(obj.name) > 0:
+        yield obj.name
+    while child is not None:
+        for s in traverseText(child):
+            yield s
+        child = child.simpleNext
+
+
+def speakDocument(document):
+    generator = traverseText(document)
+    def callback():
+        try:
+            text = generator.__next__()
+        except StopIteration:
+            return
+        speech.speak([text, speech.commands.CallbackCommand(callback)])
+
+    callback()
+
 class AppModule(appModuleHandler.AppModule):
     def chooseNVDAObjectOverlayClasses(self, obj, clsList):
         if obj.role == controlTypes.ROLE_LISTITEM:
             if obj.parent is not None and obj.parent.parent is not None and obj.parent.parent.role == controlTypes.ROLE_TABLE:
                 clsList.insert(0, UIAGridRow)
-                
+
     @script(description='Expand all messages in message view', gestures=['kb:NVDA+X'])
     def script_expandMessages(self, gesture):
         focus = api.getFocusObject()
@@ -68,22 +166,38 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
         return ""
     def _get_value(self):
         result = []
-        for child in self.children:
-            if child.UIAElement.cachedControlType == UIAHandler.UIA_ImageControlTypeId:
-                if child.columnHeaderText == "Read status":
-                    if child.name == "False":
+        # Collecting all children as a single request in order to make this real fast - code adopted from Outlook appModule
+        childrenCacheRequest=UIAHandler.handler.baseCacheRequest.clone()
+        childrenCacheRequest.addProperty(UIAHandler.UIA_NamePropertyId)
+        childrenCacheRequest.addProperty(UIAHandler.UIA_TableItemColumnHeaderItemsPropertyId)
+        childrenCacheRequest.TreeScope=UIAHandler.TreeScope_Children
+        # We must filter the children for just text and image elements otherwise getCachedChildren fails completely in conversation view.
+        childrenCacheRequest.treeFilter=createUIAMultiPropertyCondition({UIAHandler.UIA_ControlTypePropertyId:[UIAHandler.UIA_TextControlTypeId,UIAHandler.UIA_ImageControlTypeId]})
+        cachedChildren=self.UIAElement.buildUpdatedCache(childrenCacheRequest).getCachedChildren()
+
+        for index in range(cachedChildren.length):
+            mylog(f"index={index}")
+            child = cachedChildren.getElement(index)
+            name = child.CurrentName
+            if child.cachedControlType == UIAHandler.UIA_ImageControlTypeId:
+                # I adore the beauty of COM interfaces!
+                columnHeaderText = child.getCachedPropertyValueEx(UIAHandler.UIA_TableItemColumnHeaderItemsPropertyId,True).QueryInterface(UIAHandler.IUIAutomationElementArray).getElement(0).CurrentName
+                name = child.CurrentName
+                mylog(f"Image '{name}' '{columnHeaderText}'")
+                if columnHeaderText == "Read status":
+                    if name == "False":
                         result.append("Unread")
-                    elif child.name == "True":
+                    elif name == "True":
                         pass
                     else:
-                        result.append(child.columnHeaderText + ": " + child.name)
-                elif child.name != "False":
-                    if child.name == "True":
-                        result.append(child.columnHeaderText)
+                        result.append(columnHeaderText + ": " + name)
+                elif name != "False":
+                    if name == "True":
+                        result.append(columnHeaderText)
                     else:
-                        result.append(child.columnHeaderText + ": " + child.name)
+                        result.append(columnHeaderText + ": " + name)
             else:
-                result.append(child.name)
+                result.append(name)
         return " ".join(result)
     def _get_previous(self):
         prev = super()._get_previous()
@@ -105,3 +219,7 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
             if len(parent.children) > 0:
                 return parent.children[0]
             parent = parent.next
+    @script(description='Read current email message.', gestures=['kb:NVDA+DownArrow'])
+    def script_readEmail(self, gesture):
+        document = findSubDocument()
+        speakDocument(document)
