@@ -97,6 +97,8 @@ def printTree3(obj, level=10, indent=0):
         result.append(printTree3(child, li, ni))
         child = child.simpleNext
     return "\n".join(result)
+
+    
 def desc(obj):
     return f"{controlTypes.roleLabels[obj.role]} {obj.name}"
     
@@ -166,7 +168,7 @@ def traverseText(obj):
         child = child.simpleNext
 
 
-def speakDocument(document):
+def speakObject(document):
     # Try also using:
     # sayAllHandler.readObjects(document)
     generator = traverseText(document)
@@ -216,6 +218,8 @@ class AppModule(appModuleHandler.AppModule):
         nextHandler()
     def event_UIA_window_windowOpen(self, obj, nextHandler):
         eventHandler.executeEvent("gainFocus", obj)
+        # We don't use sayAllHandler.readObjects(obj) here, since it would read the title of the window again.
+        speakObject(obj)
         nextHandler()
     
     
@@ -278,4 +282,4 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
     @script(description='Read current email message.', gestures=['kb:NVDA+DownArrow'])
     def script_readEmail(self, gesture):
         document = findSubDocument()
-        speakDocument(document)
+        speakObject(document)
