@@ -1,0 +1,65 @@
+f = focus
+t = []
+while f is not None:
+    t.append(controlTypes.roleLabels[f.role])
+    f = f.parent
+
+def findRecursively(root, condition):
+    result = []
+    siblings = [root]
+    while len(siblings) > 0:
+        nextSiblings = []
+        for c in siblings:
+            if condition(c):
+                result.append (c)
+            nextSiblings.extend(c.children)
+        if len(result) > 0:
+            return result
+        siblings = nextSiblings
+    return []
+
+def findMailView(focus=None):
+    if not focus:
+        focus = api.getFocusObject()
+    window = getWindow(focus)
+    #window = api.getForegroundObject()
+    # For some reason .firstChild returns a different result compared to children[0]
+    #mailView = window.children[0]
+    mailView = window.firstChild.firstChild
+    if mailView.name != "Mail view":
+        raise Exception(f"Cannot find mail view!\n{printTree2(window)}")
+    return
+def findDocument(focus=None):
+    mw = findMailView(focus)
+    try:
+        document = mw.firstChild.next.firstChild.firstChild.firstChild.firstChild
+        if document.role != controlTypes.ROLE_DOCUMENT:
+            raise IndexError()
+    except IndexError as e:
+        raise Exception(f"Couldn't find document; debug MailView: {printTree2(mw)}", e)
+    except AttributeError as e:
+        raise Exception(f"Couldn't find document; debug MailView: {printTree2(mw)}", e)
+    return document
+
+def findSubDocument(focus=None):
+    d = findDocument(focus)
+    def failWithDebugInfo(s):
+        raise Exception(f"Couldn't find subdocument; {s}; debug:: {printTree2(d)}", e)
+    obj = d
+    for i in range(10):
+        obj = obj.lastChild
+        if obj is None:
+            failWithDebugInfo()
+        if obj.role == controlTypes.ROLE_DOCUMENT:
+            return obj
+    failWithDebugInfo()
+logEvents = False
+if False:
+    # Do some event debugging!
+    originalShouldAcceptEvent = eventHandler.shouldAcceptEvent
+    def shouldAcceptEvent(eventName, windowHandle=None):
+        if logEvents:
+            mylog(f"sae({eventName}, {windowHandle})")
+        return originalShouldAcceptEvent(eventName, windowHandle)
+    eventHandler.shouldAcceptEvent = shouldAcceptEvent
+    tones.beep(500, 500)

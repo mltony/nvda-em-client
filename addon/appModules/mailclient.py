@@ -11,6 +11,7 @@ import bisect
 import config
 import controlTypes
 import ctypes
+import eventHandler
 import globalPluginHandler
 import gui
 import json
@@ -32,7 +33,7 @@ import UIAHandler
 from UIAUtils import createUIAMultiPropertyCondition
 import wx
 
-debug = True
+debug = False
 if debug:
     f = open("C:\\Users\\tony\\Dropbox\\1.txt", "w", encoding="utf-8")
 def mylog(s):
@@ -96,7 +97,9 @@ def printTree3(obj, level=10, indent=0):
         result.append(printTree3(child, li, ni))
         child = child.simpleNext
     return "\n".join(result)
-
+def desc(obj):
+    return f"{controlTypes.roleLabels[obj.role]} {obj.name}"
+    
 def getWindow(focus):
     if focus.parent is None:
         raise Exception("Desktop window is focused!")
@@ -119,6 +122,39 @@ def findSubDocument(window=None):
     if subdocument.role != controlTypes.ROLE_DOCUMENT:
         raise Exception(f"Failed to find subdocument. Debug:\n{printTree3(document)}")
     return subdocument
+    
+def findTopLevelObject(focus=None, window=None):
+    if window is None:
+        window = api.getForegroundObject()
+    if focus is None:
+        focus = api.getFocusObject()
+    while focus.parent is not None:
+        if focus.simpleParent == window:
+            return focus
+        focus = focus.simpleParent
+    raise Exception("Something went wrong!")
+
+def circularSimpleNext(obj, direction):
+    next = obj.simpleNext if direction > 0 else obj.simplePrevious
+    if next is None:
+        next = obj.simpleParent.simpleFirstChild if direction > 0 else obj.simpleParent.simpleLastChild
+    return next
+    
+def findNextImportant(direction, focus=None, window=None):
+    tlo = findTopLevelObject(focus, window)
+    obj = tlo
+    for i in range(100):
+        obj = circularSimpleNext(obj, direction)
+        if obj == tlo:
+            raise Exception(f"Failed to find next top-level object. Debug:\n{printTree3(window)}")
+        if obj.role in {
+            controlTypes.ROLE_TABLE,
+            controlTypes.ROLE_DOCUMENT,
+            controlTypes.ROLE_TREEVIEW,
+        } :
+            return obj
+    raise Exception(f"Failed to find next top-level object - infinite loop detected. Debug:\n{printTree3(window)}")
+        
 
 def traverseText(obj):
     child = obj.simpleFirstChild
@@ -131,6 +167,8 @@ def traverseText(obj):
 
 
 def speakDocument(document):
+    # Try also using:
+    # sayAllHandler.readObjects(document)
     generator = traverseText(document)
     def callback():
         try:
@@ -140,6 +178,7 @@ def speakDocument(document):
         speech.speak([text, speech.commands.CallbackCommand(callback)])
 
     callback()
+
 
 class AppModule(appModuleHandler.AppModule):
     def chooseNVDAObjectOverlayClasses(self, obj, clsList):
@@ -160,7 +199,26 @@ class AppModule(appModuleHandler.AppModule):
                 heading.obj.doAction()
         ui.message(_("Expanded"))
         ui.message(f"Found {len(headings)} headings")
-
+        
+    @script(description='Jump to next pane', gestures=['kb:F6'])
+    def script_nextPane(self, gesture):
+        obj = findNextImportant(1)
+        obj.setFocus()
+        api.setFocusObject(obj)
+    @script(description='Jump to previous pane', gestures=['kb:Shift+F6'])
+    def script_previousPane(self, gesture):
+        obj = findNextImportant(-1)
+        obj.setFocus()
+        api.setFocusObject(obj)
+    def event_gainFocus(self, obj, nextHandler):
+        nextHandler()
+    def event_focusEntered(self,obj,nextHandler):
+        nextHandler()
+    def event_UIA_window_windowOpen(self, obj, nextHandler):
+        eventHandler.executeEvent("gainFocus", obj)
+        nextHandler()
+    
+    
 class UIAGridRow(RowWithFakeNavigation,UIA):
     def _get_name(self):
         return ""
@@ -176,14 +234,12 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
         cachedChildren=self.UIAElement.buildUpdatedCache(childrenCacheRequest).getCachedChildren()
 
         for index in range(cachedChildren.length):
-            mylog(f"index={index}")
             child = cachedChildren.getElement(index)
             name = child.CurrentName
             if child.cachedControlType == UIAHandler.UIA_ImageControlTypeId:
                 # I adore the beauty of COM interfaces!
                 columnHeaderText = child.getCachedPropertyValueEx(UIAHandler.UIA_TableItemColumnHeaderItemsPropertyId,True).QueryInterface(UIAHandler.IUIAutomationElementArray).getElement(0).CurrentName
                 name = child.CurrentName
-                mylog(f"Image '{name}' '{columnHeaderText}'")
                 if columnHeaderText == "Read status":
                     if name == "False":
                         result.append("Unread")
