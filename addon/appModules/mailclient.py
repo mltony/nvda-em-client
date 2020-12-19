@@ -256,7 +256,7 @@ def speakObject(document):
     callback()
 
 logEvents = False
-if True:
+if False:
     # Do some event debugging!
     originalShouldAcceptEvent = eventHandler.shouldAcceptEvent
     def shouldAcceptEvent(eventName, windowHandle=None):
@@ -287,7 +287,9 @@ class AppModule(appModuleHandler.AppModule):
         
     @script(description='Jump to next pane', gestures=['kb:F5'])
     def script_toggleLog(self, gesture):
-        
+        global logEvents
+        logEvents = not logEvents
+        ui.message(f"logEvents={logEvents}")
 
     @script(description='Jump to next pane', gestures=['kb:F6'])
     def script_nextPane(self, gesture):
