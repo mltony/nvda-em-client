@@ -31,10 +31,9 @@ import tones
 import ui
 import UIAHandler
 from UIAUtils import createUIAMultiPropertyCondition
-import winUser
 import wx
 
-debug = False
+debug = True
 if debug:
     f = open("C:\\Users\\tony\\Dropbox\\1.txt", "w", encoding="utf-8")
 def mylog(s):
@@ -66,7 +65,7 @@ def printTree(obj, level=10, indent=0):
     for child in children:
         result.extend(printTree(child, li, ni))
     return "\n".join(result)
-
+    
 
 def printTree2(obj, level=10, indent=0):
     result = []
@@ -82,7 +81,7 @@ def printTree2(obj, level=10, indent=0):
         result.append(printTree2(child, li, ni))
         child = child.next
     return "\n".join(result)
-
+    
 
 def printTree3(obj, level=10, indent=0):
     result = []
@@ -121,8 +120,8 @@ def getWindow(focus):
     while focus.parent.parent is not None:
         focus = focus.parent
     return focus
-
-
+    
+    
 def     findDocument(window=None):
     if window is None:
         window = api.getForegroundObject()
@@ -266,14 +265,11 @@ if False:
         return originalShouldAcceptEvent(eventName, windowHandle)
     eventHandler.shouldAcceptEvent = shouldAcceptEvent
     tones.beep(500, 500)
-
-
 class AppModule(appModuleHandler.AppModule):
     def chooseNVDAObjectOverlayClasses(self, obj, clsList):
         if obj.role == controlTypes.ROLE_LISTITEM:
             if obj.parent is not None and obj.parent.parent is not None and obj.parent.parent.role == controlTypes.ROLE_TABLE:
                 clsList.insert(0, UIAGridRow)
-                pass
 
     @script(description='Expand all messages in message view', gestures=['kb:NVDA+X'])
     def script_expandMessages(self, gesture):
@@ -288,14 +284,12 @@ class AppModule(appModuleHandler.AppModule):
                 heading.obj.doAction()
         ui.message(_("Expanded"))
         ui.message(f"Found {len(headings)} headings")
-
+        
     @script(description='Jump to next pane', gestures=['kb:F5'])
     def script_toggleLog(self, gesture):
         global logEvents
         logEvents = not logEvents
         ui.message(f"logEvents={logEvents}")
-
-
 
     @script(description='Jump to next pane', gestures=['kb:F6'])
     def script_nextPane(self, gesture):
@@ -316,7 +310,6 @@ class AppModule(appModuleHandler.AppModule):
         # We don't use sayAllHandler.readObjects(obj) here, since it would read the title of the window again.
         speakObject(obj)
         nextHandler()
-
 
 
 class UIAGridRow(RowWithFakeNavigation,UIA):
@@ -363,7 +356,7 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
         return " ".join(result)
         
         cachedChildren = self.getChildren()
-    def findNextUnread(self, direction, errorMsg):
+    def findNextUnread(self, direction):
         readStatusIndex = -1
         cachedChildren = self.getChildren()
         for index in range(cachedChildren.length):
@@ -378,7 +371,7 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
         for i in range(1000):
             obj = obj.next if direction > 0 else obj.previous
             if obj is None:
-                ui.message(errorMsg)
+                ui.message(_("No next unread email"))
                 return
             cachedChildren = self.getChildren(obj)
             name = cachedChildren.GetElement(readStatusIndex).CachedName
@@ -389,11 +382,11 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
             
     @script(description='Find next unread email', gestures=['kb:N'])
     def script_nextUnread(self, gesture):
-        return self.findNextUnread(1, _("No next unread email"))
+        return self.findNextUnread(1)
         
     @script(description='Find previous unread email', gestures=['kb:P'])
     def script_previousUnread(self, gesture):
-        return self.findNextUnread(-1, _("No next previous email"))
+        return self.findNextUnread(-1)
 
     def _get_previous(self):
         prev = super()._get_previous()
