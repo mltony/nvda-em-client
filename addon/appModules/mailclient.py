@@ -34,7 +34,7 @@ from UIAUtils import createUIAMultiPropertyCondition
 import winUser
 import wx
 
-debug = True
+debug = False
 if debug:
     f = open("C:\\Users\\tony\\Dropbox\\1.txt", "w", encoding="utf-8")
 def mylog(s):
