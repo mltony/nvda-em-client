@@ -16,7 +16,7 @@ import globalPluginHandler
 import gui
 import json
 import NVDAHelper
-from NVDAObjects.behaviors import RowWithFakeNavigation, Dialog
+from NVDAObjects.behaviors import RowWithFakeNavigation, Dialog, Notification
 from NVDAObjects.UIA import UIA
 from NVDAObjects.window import winword
 import operator
@@ -34,7 +34,7 @@ from UIAUtils import createUIAMultiPropertyCondition
 import winUser
 import wx
 
-debug = False
+debug = True
 if debug:
     f = open("C:\\Users\\tony\\Dropbox\\1.txt", "w", encoding="utf-8")
 def mylog(s):
@@ -91,7 +91,7 @@ def printTree3(obj, level=10, indent=0):
         return f"{indentStr}<None>"
     if level < 0:
         return f"{indentStr}..."
-    name = obj.name
+    name = obj.name or "<None>"
     if "\n" in name:
         indentStr2 = indentStr + "    "
         name = "\n" + "\n".join(
@@ -113,6 +113,12 @@ def printTree3(obj, level=10, indent=0):
 
 def desc(obj):
     return f"{controlTypes.roleLabels[obj.role]} {obj.name}"
+
+
+cc = api.copyToClip
+
+
+jj = lambda x: "\n".join(x)
 
 
 def getWindow(focus):
@@ -261,10 +267,17 @@ if False:
     # Do some event debugging!
     originalShouldAcceptEvent = eventHandler.shouldAcceptEvent
     def shouldAcceptEvent(eventName, windowHandle=None):
+        result = originalShouldAcceptEvent(eventName, windowHandle)
         if logEvents:
-            mylog(f"sae({eventName}, {windowHandle})")
-        return originalShouldAcceptEvent(eventName, windowHandle)
+            mylog(f"{result} ({eventName}, {windowHandle})")
+        return result
     eventHandler.shouldAcceptEvent = shouldAcceptEvent
+    originalQueueEvent = eventHandler.queueEvent
+    def queueEvent(eventName,obj,**kwargs):
+        if logEvents:
+            mylog(f"queueEvent {eventName} {desc(obj)}")
+        return originalQueueEvent(eventName,obj,**kwargs)
+    eventHandler.queueEvent = queueEvent
     tones.beep(500, 500)
 
 
@@ -274,6 +287,7 @@ class AppModule(appModuleHandler.AppModule):
             if obj.parent is not None and obj.parent.parent is not None and obj.parent.parent.role == controlTypes.ROLE_TABLE:
                 clsList.insert(0, UIAGridRow)
                 pass
+        clsList.insert(0, FocusableObject)
 
     @script(description='Expand all messages in message view', gestures=['kb:NVDA+X'])
     def script_expandMessages(self, gesture):
@@ -288,8 +302,7 @@ class AppModule(appModuleHandler.AppModule):
                 heading.obj.doAction()
         ui.message(_("Expanded"))
         ui.message(f"Found {len(headings)} headings")
-
-    @script(description='Jump to next pane', gestures=['kb:F5'])
+    #@script(description='Jump to next pane', gestures=['kb:F5'])
     def script_toggleLog(self, gesture):
         global logEvents
         logEvents = not logEvents
@@ -307,24 +320,32 @@ class AppModule(appModuleHandler.AppModule):
         obj = findNextPane(-1)
         obj.setFocus()
         api.setFocusObject(obj)
+    """
     def event_gainFocus(self, obj, nextHandler):
+        #if obj.role == controlTypes.ROLE_MENU:
+            #tones.beep(500, 50)
+        if obj.role == controlTypes.ROLE_TABLE:
+            tones.beep(700, 50)
         nextHandler()
     def event_focusEntered(self,obj,nextHandler):
         nextHandler()
+    
     def event_UIA_window_windowOpen(self, obj, nextHandler):
-        eventHandler.executeEvent("gainFocus", obj)
-        # We don't use sayAllHandler.readObjects(obj) here, since it would read the title of the window again.
-        speakObject(obj)
+        #eventHandler.executeEvent("gainFocus", obj)
+        ## We don't use sayAllHandler.readObjects(obj) here, since it would read the title of the window again.
+        #speakObject(obj)
+        Notification.event_alert(self)
         nextHandler()
-
+    """
 
 
 class UIAGridRow(RowWithFakeNavigation,UIA):
     # Translators: name of the column that denotes read status in the messages table
     readStatus = _("Read status")
+    shouldAllowUIAFocusEvent = True
     def _get_name(self):
         return ""
-        
+
     def getChildren(self, obj=None):
         if obj is None:
             obj = self
@@ -361,7 +382,7 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
             else:
                 result.append(name)
         return " ".join(result)
-        
+
         cachedChildren = self.getChildren()
     def findNextUnread(self, direction, errorMsg):
         readStatusIndex = -1
@@ -386,15 +407,15 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
                 obj.setFocus()
                 return
         raise Exception("Could not find unread email after 1000 iterations!")
-            
+
     @script(description='Find next unread email', gestures=['kb:N'])
     def script_nextUnread(self, gesture):
         return self.findNextUnread(1, _("No next unread email"))
-        
+
     @script(description='Find previous unread email', gestures=['kb:P'])
     def script_previousUnread(self, gesture):
         return self.findNextUnread(-1, _("No next previous email"))
-
+    """
     def _get_previous(self):
         prev = super()._get_previous()
         if prev is not None:
@@ -410,7 +431,7 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
                 return parent.children[-1]
             counter += 1
         return None
-            
+
 
 
     def _get_next(self):
@@ -428,7 +449,15 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
                 return parent.children[0]
             counter  += 1
         return None
+    """
     @script(description='Read current email message.', gestures=['kb:NVDA+DownArrow'])
     def script_readEmail(self, gesture):
         document = findSubDocument()
         speakObject(document)
+    def qevent_gainFocus(self, obj, nextHandler):
+        #tones.beep(500, 50)
+        super().event_gainFocus(obj, nextHandler)
+
+class FocusableObject:
+    #shouldAllowUIAFocusEvent = True
+    pass
