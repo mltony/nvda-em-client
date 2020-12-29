@@ -1,3 +1,80 @@
+#useful for debug!
+def printTree(obj, level=10, indent=0):
+    result = []
+    indentStr = " "*indent
+    if level < 0:
+        return [f"{indentStr}..."]
+    try:
+        desc = f"{indentStr}{controlTypes.roleLabels[obj.role]} {obj.name}"
+    except:
+        desc = str(type(obj))
+    result.append(desc)
+    ni = indent+4
+    li = level-1
+    try:
+        children = obj.children
+    except:
+        children = []
+    for child in children:
+        result.extend(printTree(child, li, ni))
+    return "\n".join(result)
+
+
+def printTree2(obj, level=10, indent=0):
+    result = []
+    indentStr = " "*indent
+    if level < 0:
+        return f"{indentStr}..."
+    desc = f"{indentStr}{controlTypes.roleLabels[obj.role]} {obj.name}"
+    result.append(desc)
+    ni = indent+4
+    li = level-1
+    child = obj.firstChild
+    while child is not None:
+        result.append(printTree2(child, li, ni))
+        child = child.next
+    return "\n".join(result)
+
+
+def printTree3(obj, level=10, indent=0):
+    result = []
+    indentStr = " "*indent
+    if obj is None:
+        return f"{indentStr}<None>"
+    if level < 0:
+        return f"{indentStr}..."
+    name = obj.name or "<None>"
+    if "\n" in name:
+        indentStr2 = indentStr + "    "
+        name = "\n" + "\n".join(
+            [
+                indentStr2 + s
+                for s in name.split("\n")
+            ]
+        )
+    desc = f"{indentStr}{controlTypes.roleLabels[obj.role]} {name}"
+    result.append(desc)
+    ni = indent+4
+    li = level-1
+    child = obj.simpleFirstChild
+    while child is not None:
+        result.append(printTree3(child, li, ni))
+        child = child.simpleNext
+    return "\n".join(result)
+
+
+def desc(obj):
+    return f"{controlTypes.roleLabels[obj.role]} {obj.name}"
+
+
+cc = api.copyToClip
+
+
+jj = lambda x: "\n".join(x)
+
+
+
+
 f = focus
 t = []
 while f is not None:

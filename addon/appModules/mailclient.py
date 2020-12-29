@@ -46,42 +46,6 @@ def myAssert(condition):
     if not condition:
         raise RuntimeError("Assertion failed")
 
-#useful for debug!
-def printTree(obj, level=10, indent=0):
-    result = []
-    indentStr = " "*indent
-    if level < 0:
-        return [f"{indentStr}..."]
-    try:
-        desc = f"{indentStr}{controlTypes.roleLabels[obj.role]} {obj.name}"
-    except:
-        desc = str(type(obj))
-    result.append(desc)
-    ni = indent+4
-    li = level-1
-    try:
-        children = obj.children
-    except:
-        children = []
-    for child in children:
-        result.extend(printTree(child, li, ni))
-    return "\n".join(result)
-
-
-def printTree2(obj, level=10, indent=0):
-    result = []
-    indentStr = " "*indent
-    if level < 0:
-        return f"{indentStr}..."
-    desc = f"{indentStr}{controlTypes.roleLabels[obj.role]} {obj.name}"
-    result.append(desc)
-    ni = indent+4
-    li = level-1
-    child = obj.firstChild
-    while child is not None:
-        result.append(printTree2(child, li, ni))
-        child = child.next
-    return "\n".join(result)
 
 
 def printTree3(obj, level=10, indent=0):
@@ -109,17 +73,6 @@ def printTree3(obj, level=10, indent=0):
         result.append(printTree3(child, li, ni))
         child = child.simpleNext
     return "\n".join(result)
-
-
-def desc(obj):
-    return f"{controlTypes.roleLabels[obj.role]} {obj.name}"
-
-
-cc = api.copyToClip
-
-
-jj = lambda x: "\n".join(x)
-
 
 def getWindow(focus):
     if focus.parent is None:
@@ -157,88 +110,6 @@ def findTopLevelObject(focus=None, window=None):
         focus = focus.simpleParent
     raise Exception("Something went wrong!")
 
-def circularSimpleNext(obj, direction):
-    next = obj.simpleNext if direction > 0 else obj.simplePrevious
-    if next is None:
-        next = obj.simpleParent.simpleFirstChild if direction > 0 else obj.simpleParent.simpleLastChild
-    return next
-
-def findNextPane(direction, focus=None, window=None):
-    " Old impl"
-    tlo = findTopLevelObject(focus, window)
-    obj = tlo
-    for i in range(100):
-        obj = circularSimpleNext(obj, direction)
-        if obj == tlo:
-            raise Exception(f"Failed to find next top-level object. Debug:\n{printTree3(window)}")
-        if obj.role in {
-            controlTypes.ROLE_TABLE,
-            controlTypes.ROLE_DOCUMENT,
-            controlTypes.ROLE_TREEVIEW,
-        } :
-            return obj
-    raise Exception(f"Failed to find next top-level object - infinite loop detected. Debug:\n{printTree3(window)}")
-
-def getSimpleSiblingsRecursively(obj, direction):
-    result = []
-    for i in range(100):
-        obj = obj.simpleNext if direction > 0 else obj.simplePrevious
-        if obj is None:
-            return result
-        result.append(obj)
-    raise Exception("Infinite loop!")
-
-def getSimpleSiblings(obj):
-    return getSimpleSiblingsRecursively(obj, -1)[::-1] + [obj] + getSimpleSiblingsRecursively(obj, 1)
-
-def findNextPane(direction, focus=None, window=None):
-    tlo = findTopLevelObject(focus, window)
-    obj = tlo
-    siblings = getSimpleSiblings(obj)
-    mylog("Before filtering:\n" + "\n".join(map(desc, siblings)))
-    interestingRoles = {
-            controlTypes.ROLE_TABLE,
-            controlTypes.ROLE_DOCUMENT,
-            controlTypes.ROLE_TREEVIEW,
-    }
-    interestingIndices = [i for i in range(len(siblings)) if siblings[i].role in interestingRoles]
-    mylog(f"interestingIndices={interestingIndices}")
-    effectiveIndex = max(0, bisect.bisect_right(interestingIndices, siblings.index(tlo)) - 1)
-    effectiveIndex = interestingIndices[effectiveIndex]
-    mylog(f"effectiveIndex={effectiveIndex}")
-    effectiveTlo = siblings[effectiveIndex]
-    mylog(f"effectiveTlo={desc(effectiveTlo)}")
-    #ui.message(desc(effectiveTlo))
-    siblings = list(filter(lambda x: x.role in interestingRoles, siblings))
-    mylog("After filtering: \n" + "\n".join(map(desc, siblings)))
-    # Now reshuffle things.
-    newOrder = []
-    def moveToNewOrder(role):
-        ii = [i for i in range(len(siblings)) if siblings[i].role == role]
-        if len(ii) > 0:
-            i = ii[0]
-            mylog(f"Moving {i}-th element {desc(siblings[i])} to newOrder!")
-            newOrder.append(siblings[i])
-            del siblings[i]
-        else:
-            mylog(f"Couldn't find {controlTypes.roleLabels[role]}")
-
-    moveToNewOrder(controlTypes.ROLE_TREEVIEW)
-    moveToNewOrder(controlTypes.ROLE_TABLE)
-    moveToNewOrder(controlTypes.ROLE_DOCUMENT)
-    newOrder.extend(siblings)
-    mylog("After reshuffling: \n" + "\n".join(map(desc, siblings)))
-    newIndex = newOrder.index(effectiveTlo)
-    mylog(f"newIndex={newIndex}")
-    newIndex = (newIndex + direction) % len(newOrder)
-    mylog(f"newIndex={newIndex}")
-    newObj = newOrder[newIndex]
-    mylog(f"newObj={desc(newObj)}")
-    return newObj
-
-
-
-
 def traverseText(obj):
     child = obj.simpleFirstChild
     if child is None and obj.name is not None and len(obj.name) > 0:
@@ -262,32 +133,11 @@ def speakObject(document):
 
     callback()
 
-logEvents = False
-if False:
-    # Do some event debugging!
-    originalShouldAcceptEvent = eventHandler.shouldAcceptEvent
-    def shouldAcceptEvent(eventName, windowHandle=None):
-        result = originalShouldAcceptEvent(eventName, windowHandle)
-        if logEvents:
-            mylog(f"{result} ({eventName}, {windowHandle})")
-        return result
-    eventHandler.shouldAcceptEvent = shouldAcceptEvent
-    originalQueueEvent = eventHandler.queueEvent
-    def queueEvent(eventName,obj,**kwargs):
-        if logEvents:
-            mylog(f"queueEvent {eventName} {desc(obj)}")
-        return originalQueueEvent(eventName,obj,**kwargs)
-    eventHandler.queueEvent = queueEvent
-    tones.beep(500, 500)
-
-
 class AppModule(appModuleHandler.AppModule):
     def chooseNVDAObjectOverlayClasses(self, obj, clsList):
         if obj.role == controlTypes.ROLE_LISTITEM:
             if obj.parent is not None and obj.parent.parent is not None and obj.parent.parent.role == controlTypes.ROLE_TABLE:
                 clsList.insert(0, UIAGridRow)
-                pass
-        clsList.insert(0, FocusableObject)
 
     @script(description='Expand all messages in message view', gestures=['kb:NVDA+X'])
     def script_expandMessages(self, gesture):
@@ -300,43 +150,7 @@ class AppModule(appModuleHandler.AppModule):
         for heading in headings:
             if heading.obj.IA2Attributes.get('class', "") == "header header_gray":
                 heading.obj.doAction()
-        ui.message(_("Expanded"))
-        ui.message(f"Found {len(headings)} headings")
-    #@script(description='Jump to next pane', gestures=['kb:F5'])
-    def script_toggleLog(self, gesture):
-        global logEvents
-        logEvents = not logEvents
-        ui.message(f"logEvents={logEvents}")
-
-
-
-    @script(description='Jump to next pane', gestures=['kb:F6'])
-    def script_nextPane(self, gesture):
-        obj = findNextPane(1)
-        obj.setFocus()
-        api.setFocusObject(obj)
-    @script(description='Jump to previous pane', gestures=['kb:Shift+F6'])
-    def script_previousPane(self, gesture):
-        obj = findNextPane(-1)
-        obj.setFocus()
-        api.setFocusObject(obj)
-    """
-    def event_gainFocus(self, obj, nextHandler):
-        #if obj.role == controlTypes.ROLE_MENU:
-            #tones.beep(500, 50)
-        if obj.role == controlTypes.ROLE_TABLE:
-            tones.beep(700, 50)
-        nextHandler()
-    def event_focusEntered(self,obj,nextHandler):
-        nextHandler()
-    
-    def event_UIA_window_windowOpen(self, obj, nextHandler):
-        #eventHandler.executeEvent("gainFocus", obj)
-        ## We don't use sayAllHandler.readObjects(obj) here, since it would read the title of the window again.
-        #speakObject(obj)
-        Notification.event_alert(self)
-        nextHandler()
-    """
+        ui.message(_("Expanded%d messages") % len(headings))
 
 
 class UIAGridRow(RowWithFakeNavigation,UIA):
@@ -454,10 +268,4 @@ class UIAGridRow(RowWithFakeNavigation,UIA):
     def script_readEmail(self, gesture):
         document = findSubDocument()
         speakObject(document)
-    def qevent_gainFocus(self, obj, nextHandler):
-        #tones.beep(500, 50)
-        super().event_gainFocus(obj, nextHandler)
 
-class FocusableObject:
-    #shouldAllowUIAFocusEvent = True
-    pass
