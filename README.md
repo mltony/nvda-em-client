@@ -6,8 +6,11 @@ Accessibility improvements for eM Client
 
 ## About eM Client
 eM Client is a multiplatform email client, that is free for personal use. It has many compelling features compared to Microsoft Outlook and Thunderbird, in particular it seems to be very fast. As of December 2020, please download this build of eM Client that has up-to-date accessibility improvements:
+
 https://www.emclient.com/dist/v8.1.973/setup.msi
+
 Free license needs to be requested here:
+
 https://www.emclient.com/free-license
 
 ## Accessibility improvements
