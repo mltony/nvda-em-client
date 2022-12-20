@@ -21,7 +21,7 @@ from NVDAObjects.UIA import UIA
 from NVDAObjects.window import winword
 import operator
 import re
-import sayAllHandler
+from speech import sayAll
 from scriptHandler import script, willSayAllResume
 import speech
 import struct
@@ -30,7 +30,7 @@ import time
 import tones
 import ui
 import UIAHandler
-from UIAUtils import createUIAMultiPropertyCondition
+from UIAHandler.utils import createUIAMultiPropertyCondition
 import winUser
 import wx
 
@@ -136,7 +136,7 @@ def speakObject(document):
 class AppModule(appModuleHandler.AppModule):
     def chooseNVDAObjectOverlayClasses(self, obj, clsList):
         if obj.role == controlTypes.ROLE_LISTITEM:
-            if obj.parent is not None and obj.parent.parent is not None and obj.parent.parent.role == controlTypes.ROLE_TABLE:
+            if obj.parent is not None and obj.parent.parent is not None and obj.parent.role == controlTypes.ROLE_TABLE:
                 clsList.insert(0, UIAGridRow)
 
     @script(description='Expand all messages in message view', gestures=['kb:NVDA+X'])

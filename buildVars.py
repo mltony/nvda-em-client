@@ -19,9 +19,9 @@ addon_info = {
 	# Translators: Long description to be shown for this add-on on add-on information from add-ons manager
 	"addon_description" : _("""Accessibility improvements for eM Client."""),
 	# version
-	"addon_version" : "0.3dev",
+	"addon_version" : "0.4dev",
 	# Author(s)
-	"addon_author" : u"Tony Malykh <anton.malykh@gmail.com>",
+	"addon_author" : u"Tony Malykh <anton.malykh@gmail.com>", Stefan Moisei <vortex37@gmail.com>,
 	# URL for the add-on documentation support
 	"addon_url" : "https://github.com/mltony/nvda-em-client",
 	# Documentation file name
@@ -29,7 +29,7 @@ addon_info = {
 	# Minimum NVDA version supported (e.g. "2018.3")
 	"addon_minimumNVDAVersion" : "2019.2.0",
 	# Last NVDA version supported/tested (e.g. "2018.4", ideally more recent than minimum version)
-	"addon_lastTestedNVDAVersion" : "2019.3.0",
+	"addon_lastTestedNVDAVersion" : "2022.3.2",
 	# Add-on update channel (default is stable or None)
 	"addon_updateChannel" : None,
 }
